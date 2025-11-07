@@ -49,7 +49,18 @@ jobs:
           sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
           echo "OPENSSL_DIR=/usr" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig" >> $GITHUB_ENV
-          pkg-config --cflags --libs openssl || echo "openssl.pc not found"
+          echo "=== which pkg-config ==="
+          which pkg-config || true
+          echo "=== pkg-config --variable pc_path pkg-config ==="
+          pkg-config --variable pc_path pkg-config || true
+          echo "=== search possible openssl.pc locations ==="
+          ls /usr/lib/x86_64-linux-gnu/pkgconfig/openssl.pc 2>/dev/null && echo "found /usr/lib/x86_64-linux-gnu/pkgconfig/openssl.pc"
+          ls /usr/lib/pkgconfig/openssl.pc 2>/dev/null && echo "found /usr/lib/pkgconfig/openssl.pc"
+          dpkg -L libssl-dev | grep openssl.pc || true
+          echo "=== pkg-config (debug) ==="
+          PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --libs --cflags openssl || echo "pkg-config did not find openssl"
+          echo "=== env ==="
+          env | grep -E 'PKG_CONFIG|OPENSSL' || true
 
       - name: Install OpenSSL (Windows)
         if: contains(matrix.target, 'windows')
