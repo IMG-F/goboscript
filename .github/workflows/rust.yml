@@ -45,7 +45,11 @@ jobs:
 
       - name: Install OpenSSL dependencies
         if: contains(matrix.target, 'unknown-linux')
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+        run: |
+          sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+          echo "OPENSSL_DIR=/usr" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig" >> $GITHUB_ENV
+          pkg-config --cflags --libs openssl || echo "openssl.pc not found"
 
       - name: Install OpenSSL (Windows)
         if: contains(matrix.target, 'windows')
