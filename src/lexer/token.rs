@@ -238,6 +238,12 @@ pub enum Token {
     SetLayerOrder,
     #[token("var")]
     Var,
+    #[token("native")]
+    Native,
+    #[token("Menu")]
+    Menu,
+    #[token("MenuInput")]
+    MenuInput,
 }
 
 impl Display for Token {
@@ -354,6 +360,9 @@ impl Display for Token {
             Token::SetRotationStyleDoNotRotate => write!(f, "set_rotation_style_do_not_rotate"),
             Token::SetLayerOrder => write!(f, "set_layer_order"),
             Token::Var => write!(f, "var"),
+            Token::Native => write!(f, "native"),
+            Token::Menu => write!(f, "Menu"),
+            Token::MenuInput => write!(f, "MenuInput"),
         }
     }
 }

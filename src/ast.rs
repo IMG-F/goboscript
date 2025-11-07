@@ -22,6 +22,7 @@ mod struct_literal_field;
 mod type_;
 mod value;
 mod var;
+mod ext_menu_type;
 
 pub use arg::*;
 pub use const_expr::*;
@@ -46,3 +47,4 @@ pub use struct_literal_field::*;
 pub use type_::*;
 pub use value::*;
 pub use var::*;
+pub use ext_menu_type::*;

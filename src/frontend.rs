@@ -23,7 +23,7 @@ use crate::{
 
 pub fn frontend() -> ExitCode {
     match Cli::parse().command {
-        Command::Build { input, output } => match build::build(input, output) {
+        Command::Build { input, output, environment } => match build::build(input, output, environment) {
             Ok(artifact) => {
                 artifact.eprint();
                 eprintln!();
@@ -56,11 +56,13 @@ pub fn frontend() -> ExitCode {
             stage_width,
             stage_height,
             makefile,
+            task,
         } => {
             match new::new(
                 name,
                 no_git,
                 makefile,
+                task,
                 Config {
                     pre_build: None,
                     post_build: None,
@@ -75,6 +77,7 @@ pub fn frontend() -> ExitCode {
                     high_quality_pen: high_quality_pen.then_some(true),
                     stage_width,
                     stage_height,
+                    extensions: None,
                 },
             ) {
                 Err(NewError::AnyhowError(err)) => {

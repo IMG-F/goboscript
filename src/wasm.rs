@@ -50,6 +50,7 @@ pub fn build(fs: JsValue) -> JsValue {
         "project".into(),
         sb3,
         Some(stdlib),
+        None,
     )
     .unwrap();
     serde_wasm_bindgen::to_value(&Build { file, artifact }).unwrap()

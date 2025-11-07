@@ -16,18 +16,40 @@ patterns:
     end: "\\b"
   - name: string.quoted.double
     match: "\"([^\"\\\\]|\\\\[\"\\\\bnfrt]|u[a-fA-F0-9]{4})*\""
-  - begin: "\\b(proc|func)[\\s\\n]+([a-zA-Z_][_a-zA-Z0-9]*)"
-    end: "\\{"
+  - begin: "\\b(proc|func)\\b[\\s\\n]+(native\\b[\\s\\n]+)?([a-zA-Z_][_a-zA-Z0-9]*)"
+    end: "\\{|;"
     beginCaptures:
       1:
         name: keyword
       2:
+        name: storage.modifier
+      3:
         name: entity.name.function
     patterns:
-      - name: variable.parameter
-        match: "[a-zA-Z_][_a-zA-Z0-9]*"
+      - begin: "\\b([A-Za-z_][A-Za-z0-9_]*)(?:\\s*(<)\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(>))?\\s+([A-Za-z_][A-Za-z0-9_]*)"
+        end: "(?=,|\\)|\\{)"
+        beginCaptures:
+          1:
+            name: entity.name.type
+          2:
+            name: keyword.other
+          3:
+            name: entity.name.type
+          4:
+            name: keyword.other
+          5:
+            name: variable.parameter
+        patterns:
+          - name: entity.name.type.parameter
+            match: "(?<=<)\\s*[A-Za-z_][A-Za-z0-9_]*\\s*(?=>)"
+      - begin: "\\b([A-Za-z_][A-Za-z0-9_]*)"
+        end: "(?=,|\\)|\\{)"
+        beginCaptures:
+          1:
+            name: variable.parameter
+        patterns: []
       - name: punctuation
-        match: ",|;"
+        match: ","
   - name: keyword
     match: "\\b(costumes|sounds|global|var|list|nowarp|onflag|onkey|onbackdrop|onloudness|ontimer|on|onclone)\\b"
   - name: keyword.control

@@ -18,6 +18,7 @@ use crate::{
     lexer::token::Token,
     misc::SmolStr,
 };
+use crate::ast::Expr;
 
 #[derive(Debug, Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -85,6 +86,13 @@ pub enum DiagnosticKind {
         field_name: SmolStr,
     },
     EmptyStruct(SmolStr),
+    MenuArgTypeMismatch {
+        expected: Expr,
+        given: Expr,
+    },
+    CannotFindExtensionName {
+        name: SmolStr,
+    },
     // Warnings
     FollowedByUnreachableCode,
     UnrecognizedKey(SmolStr),
@@ -221,6 +229,17 @@ impl DiagnosticKind {
                 format!("struct {struct_name} is missing field {field_name}")
             }
             DiagnosticKind::EmptyStruct(name) => format!("struct {name} is empty"),
+            DiagnosticKind::MenuArgTypeMismatch {
+                expected,
+                given
+            } => {
+                format!("menu argument type mismatch: expected {}, but got {}", expected, given)
+            }
+            DiagnosticKind::CannotFindExtensionName {
+                name
+            } => {
+                format!("cannot find extension name in native proc or func: {}", name)
+            }
         }
     }
 
@@ -378,7 +397,9 @@ impl From<&DiagnosticKind> for Level {
             | DiagnosticKind::StructDoesNotHaveField { .. }
             | DiagnosticKind::EmptyStruct(_)
             | DiagnosticKind::InvalidCostumeName(_)
-            | DiagnosticKind::InvalidBackdropName(_) => Level::Error,
+            | DiagnosticKind::InvalidBackdropName(_)
+            | DiagnosticKind::MenuArgTypeMismatch { .. }
+            | DiagnosticKind::CannotFindExtensionName { .. } => Level::Error,
 
             | DiagnosticKind::FollowedByUnreachableCode
             | DiagnosticKind::UnrecognizedKey(_)

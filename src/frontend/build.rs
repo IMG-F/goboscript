@@ -56,14 +56,16 @@ fn assign_layer_orders(project: &mut Project, config: &Config) {
     }
 }
 
-pub fn build(input: Option<PathBuf>, output: Option<PathBuf>) -> anyhow::Result<Artifact> {
+pub fn build(input: Option<PathBuf>, output: Option<PathBuf>, environment: Option<String>) -> anyhow::Result<Artifact> {
     let input = input.unwrap_or_else(|| env::current_dir().unwrap());
     let canonical_input = input.canonicalize()?;
     let project_name = canonical_input.file_name().unwrap().to_str().unwrap();
-    let output = output.unwrap_or_else(|| input.join(format!("{project_name}.sb3")));
+    let default_output_name = environment.as_ref().map(|env| format!("{project_name}-{env}.sb3"))
+        .unwrap_or_else(|| format!("{project_name}.sb3"));
+    let output = output.unwrap_or_else(|| input.join(default_output_name));
     let sb3 = Sb3::new(BufWriter::new(File::create(&output)?));
     let fs = Rc::new(RefCell::new(RealFS::new()));
-    build_impl(fs, canonical_input, sb3, None)
+    build_impl(fs, canonical_input, sb3, None, environment)
 }
 
 pub fn build_impl<T: Write + Seek>(
@@ -71,8 +73,13 @@ pub fn build_impl<T: Write + Seek>(
     input: PathBuf,
     mut sb3: Sb3<T>,
     stdlib: Option<StandardLibrary>,
+    environment: Option<String>,
 ) -> anyhow::Result<Artifact> {
-    let config_path = input.join("goboscript.toml");
+    let config_path = input.join(if environment.is_some() {
+        format!("goboscript-{}.toml", environment.as_ref().unwrap())
+    } else {
+        "goboscript.toml".to_string()
+    });
     let config_src = fs
         .borrow_mut()
         .read_to_string(&config_path)
@@ -101,7 +108,7 @@ pub fn build_impl<T: Write + Seek>(
     if !fs.borrow_mut().is_file(&stage_path) {
         return Err(anyhow!("{} not found", stage_path.display()));
     }
-    let mut stage_diagnostics = SpriteDiagnostics::new(fs.clone(), stage_path, &stdlib);
+    let mut stage_diagnostics = SpriteDiagnostics::new(fs.clone(), stage_path, &stdlib, environment.as_ref());
     let (stage, parse_diagnostics) = parser::parse(&stage_diagnostics.translation_unit);
     stage_diagnostics.diagnostics.extend(parse_diagnostics);
     let mut sprites_diagnostics: FxHashMap<SmolStr, SpriteDiagnostics> = Default::default();
@@ -126,7 +133,7 @@ pub fn build_impl<T: Write + Seek>(
             .to_str()
             .unwrap()
             .into();
-        let mut sprite_diagnostics = SpriteDiagnostics::new(fs.clone(), sprite_path, &stdlib);
+        let mut sprite_diagnostics = SpriteDiagnostics::new(fs.clone(), sprite_path, &stdlib, environment.as_ref());
         let (sprite, parse_diagnostics) = parser::parse(&sprite_diagnostics.translation_unit);
         sprite_diagnostics.diagnostics.extend(parse_diagnostics);
         sprites_diagnostics.insert(sprite_name.clone(), sprite_diagnostics);

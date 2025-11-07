@@ -1,3 +1,4 @@
 fn main() {
+    // println!("cargo:rerun-if-changed=src/parser/grammar.lalrpop");
     lalrpop::process_src().unwrap();
 }

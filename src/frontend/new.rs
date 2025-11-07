@@ -41,6 +41,7 @@ pub fn new(
     name: Option<PathBuf>,
     no_git: bool,
     makefile: bool,
+    task: bool,
     config: Config,
 ) -> Result<(), NewError> {
     let is_name_explicit = name.is_some();
@@ -61,6 +62,9 @@ pub fn new(
     )?;
     file.write_all(toml_data.as_bytes())?;
     write_templates!(&name, "stage.gs", "main.gs", "assets/blank.svg");
+    if task {
+        write_templates!(&name, ".vscode/tasks.json");
+    }
     if makefile {
         write_templates!(&name, "Makefile");
     }

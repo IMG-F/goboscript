@@ -35,6 +35,8 @@ use crate::{
         SmolStr,
     },
 };
+use crate::ast::{ExtMenuType};
+use crate::ast::ExtMenuType::NONE;
 
 impl<T> Sb3<T>
 where T: Write + Seek
@@ -534,12 +536,60 @@ where T: Write + Seek
         }
         let mut qualified_args: Vec<(SmolStr, NodeID)> = Vec::new();
         let mut qualified_arg_values: Vec<&Expr> = Vec::new();
+        let mut field_args: Vec<(&SmolStr, SmolStr)> = Vec::new();
+        let mut menus: Vec<(NodeID, &SmolStr, Option<SmolStr>)> = Vec::new();
         self.begin_inputs()?;
         for (arg, arg_value) in signature.iter().zip(args) {
             match &arg.type_ {
                 Type::Value => {
                     let arg_id = self.id.new_id();
-                    self.input(s, d, &arg.name, arg_value, arg_id, false)?;
+                    match &arg.ext_menu_type {
+                        ExtMenuType::Menu => {
+                            match arg_value {
+                                Expr::Value { value, .. } => {
+                                    field_args.push((&arg.name, value.to_string()));
+                                }
+                                _ => {
+                                    d.report(
+                                        DiagnosticKind::MenuArgTypeMismatch {
+                                            expected: Expr::Value { value: "any value".into(), span: arg_value.span().clone() },
+                                            given: arg_value.clone(),
+                                        },
+                                        & arg_value.span()
+                                    );
+                                }
+                            }
+                        }
+                        ExtMenuType::MenuInput { menu_name } => {
+                            let shadow_id = self.id.new_id();
+                            let value = match arg_value {
+                                Expr::Value { value, span: _ } => {(Some(value.to_string()), arg_value)}
+                                Expr::Name(name) => {
+                                    let option = s.get_enum(name.basename())
+                                        .and_then(|enum_| {
+                                            name.fieldname().and_then(|variant_name| {
+                                                enum_.variants.iter().find(|variant| variant_name == &variant.name)
+                                            })
+                                        })
+                                        .and_then(|variant| variant.value.as_ref());
+
+                                    if option.is_some() {
+                                        let enum_value = option.unwrap();
+
+                                        (Some(enum_value.0.to_string()), &Expr::Value { value: enum_value.0.clone(), span: name.span().clone() })
+                                    } else {
+                                        (None, arg_value)
+                                    }
+                                }
+                                _ => (None, arg_value)
+                            };
+                            self.menu_input(s, d, &arg.name, value.1, arg_id, shadow_id)?;
+                            menus.push((shadow_id, menu_name, value.0));
+                        }
+                        NONE => {
+                            self.input(s, d, &arg.name, arg_value, arg_id, false)?;
+                        }
+                    }
                     qualified_args.push((arg.name.clone(), arg_id));
                     qualified_arg_values.push(arg_value);
                 }
@@ -604,15 +654,57 @@ where T: Write + Seek
             }
         }
         self.end_obj()?; // inputs
-        write!(
-            self,
-            "{}",
-            Mutation::call(proc.name.clone(), &qualified_args, proc.warp, compact)
-        )?;
+
+        self.begin_fields()?;
+        for (field, value) in field_args {
+            self.field(field, value.as_ref())?;
+        }
+        self.end_obj()?; // fields
+
+        // Do not generate mutation for native procedures
+        if !proc.is_native {
+            write!(
+                self,
+                "{}",
+                Mutation::call(proc.name.clone(), &qualified_args, proc.warp, compact)
+            )?;
+        }
         self.end_obj()?; // node
         for (arg, (_, arg_id)) in qualified_arg_values.iter().zip(qualified_args) {
             self.expr(s, d, arg, arg_id, this_id)?;
         }
+
+        if proc.is_native && !menus.is_empty() {
+            // Generate menu nodes
+            let proc_name_split: Vec<&str> = proc.name.split('_').collect();
+            if let Some(extension_name) = proc_name_split.first() {
+                let extension_menu_prefix = format!("{}_menu_", extension_name);
+                for (shadow_id, menu_name, menu_value) in menus {
+                    let menu_opcode = format!("{}{}", extension_menu_prefix, menu_name);
+                    self.begin_node(
+                        Node::new(Box::leak(menu_opcode.into_boxed_str()), shadow_id)
+                            .parent_id(this_id)
+                            .shadow(true),
+                    )?; // menu node
+
+                    self.begin_fields()?; // menu fields
+                    if let Some(menu_value) = menu_value {
+                        self.field(menu_name, &menu_value)?;
+                    }
+                    self.end_obj()?; // menu fields
+
+                    self.end_obj()?; // menu node
+                }
+            } else {
+                d.report(
+                    DiagnosticKind::CannotFindExtensionName {
+                        name: proc.name.clone()
+                    },
+                    span,
+                );
+            }
+        }
+
         Ok(())
     }
 }

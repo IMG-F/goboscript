@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use fxhash::FxHashMap;
 use logos::Span;
 use serde::{
@@ -127,6 +128,23 @@ impl From<ConstExpr> for Expr {
                 rhs_span: variant_name_span,
                 is_generated: false,
             }),
+        }
+    }
+}
+
+impl Display for Expr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Expr::Value { .. } => write!(f, "Value"),
+            Expr::Name(_) => write!(f, "Name"),
+            Expr::Dot { .. } => write!(f, "Dot"),
+            Expr::Arg(_) => write!(f, "Arg"),
+            Expr::Repr { .. } => write!(f, "Repr"),
+            Expr::FuncCall { .. } => write!(f, "FuncCall"),
+            Expr::UnOp { .. } => write!(f, "UnOp"),
+            Expr::BinOp { .. } => write!(f, "BinOp"),
+            Expr::StructLiteral { .. } => write!(f, "StructLiteral"),
+            Expr::Property { .. } => write!(f, "Property"),
         }
     }
 }

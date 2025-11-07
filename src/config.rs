@@ -1,3 +1,4 @@
+use fxhash::FxHashMap;
 use serde::{
     Deserialize,
     Serialize,
@@ -31,4 +32,6 @@ pub struct Config {
     pub stage_width: Option<u64>,
     #[serde(default)]
     pub stage_height: Option<u64>,
+    #[serde(default)]
+    pub extensions: Option<FxHashMap<String, String>>,
 }

@@ -218,4 +218,36 @@ where T: Write + Seek
             write!(self, r#"[10, ""]]"#)
         }
     }
+
+    pub fn menu_input(
+        &mut self,
+        s: S,
+        d: D,
+        input_name: &str,
+        expr: &Expr,
+        this_id: NodeID,
+        shadow_id: NodeID,
+    ) -> io::Result<()> {
+        write_comma_io(&mut self.zip, &mut self.inputs_comma)?;
+        write!(self, r#""{input_name}":"#)?;
+        match expr {
+            Expr::Value { .. } => { return write!(self, r#"[1, {shadow_id}]"#) }
+            Expr::Name(name) => {
+                // if let Some(enum_)= s.get_enum(name.basename()) {
+                //     if let Some(variant_name) = name.fieldname() {
+                //         if let Some(variant) = enum_
+                //             .variants
+                //             .iter()
+                //             .find(|variant| variant_name == &variant.name)
+                //         {
+                //             return write!(self, r#"[1, {shadow_id}]"#)
+                //         }
+                //     }
+                // }
+                return self.name_input(s, d, input_name, name, Some(shadow_id))
+            }
+            _ => {}
+        }
+        self.node_input(input_name, this_id, Some(shadow_id), false)
+    }
 }

@@ -55,7 +55,7 @@ pub struct TranslationUnit {
 }
 
 impl TranslationUnit {
-    pub fn new(fs: Rc<RefCell<dyn VFS>>, path: PathBuf) -> Self {
+    pub fn new(fs: Rc<RefCell<dyn VFS>>, path: PathBuf, envirenment: Option<&String>) -> Self {
         let mut text = fs.borrow_mut().read_to_vec(&path).unwrap();
         if text.last().is_none_or(|&c| c != b'\n') {
             text.push(b'\n');
@@ -68,6 +68,9 @@ impl TranslationUnit {
             included: Default::default(),
             current_include: 0,
         };
+        if let Some(env) = envirenment {
+            instance.defines.insert(format!("GOBO_ENV_{}", env.to_uppercase()));
+        }
         instance.includes.push(Include {
             unit_range: 0..instance.text.len(),
             source_range: 0..instance.text.len(),
@@ -143,6 +146,11 @@ impl TranslationUnit {
                         }
                         let path = str::from_utf8(path).unwrap().trim().to_owned();
                         if !self.included.contains(&path) {
+                            // eprintln!("i: {}", i);
+                            // eprintln!("current_include: {}", self.current_include);
+                            while self.includes[self.current_include].unit_range.end < i {
+                                self.current_include += 1;
+                            }
                             if let Err(err) = self.include(fs.clone(), &path, path_span, i, stdlib)
                             {
                                 diagnostics.push(err);
@@ -205,6 +213,11 @@ impl TranslationUnit {
                 }
             }
         }
+        // 输出 self.text
+        // eprintln!("{}", str::from_utf8(&self.text).unwrap());
+
+        // 输出自己的 includes
+        // eprintln!("{}", serde_json::to_string_pretty(&self.includes).unwrap());
         if diagnostics.is_empty() {
             Ok(())
         } else {
@@ -245,6 +258,9 @@ impl TranslationUnit {
             span: path_span,
         })?;
         file.read_to_end(&mut buffer).unwrap();
+        if buffer.last().is_none_or(|&c| c != b'\n') {
+            buffer.push(b'\n');
+        }
         self.text.splice(begin..begin, buffer.iter().cloned());
 
         // split current include into two parts

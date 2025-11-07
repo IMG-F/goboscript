@@ -233,42 +233,43 @@ fn visit_expr(expr: &mut Expr, before: &mut Vec<Stmt>, s: &mut S) {
             args,
             kwargs,
         } => {
-            if let Some(func) = s.funcs.get(name) {
-                *s.callsites += 1;
-                before.push(Stmt::FuncCall {
-                    name: name.clone(),
-                    span: span.clone(),
-                    args: args.clone(),
-                    kwargs: kwargs.clone(),
-                });
-                let callsite = Name::Name {
-                    name: format!("@{}", *s.callsites).into(),
-                    span: span.clone(),
-                };
-                s.vars.insert(
-                    callsite.basename().clone(),
-                    Var {
-                        name: callsite.basename().clone(),
-                        span: callsite.basespan().clone(),
-                        type_: func.type_.clone(),
-                        default: None,
-                        is_cloud: false,
-                        is_used: true,
-                    },
-                );
-                before.push(Stmt::SetVar {
-                    name: callsite.clone(),
-                    value: Box::new(Expr::Name(Name::Name {
-                        name: format!("{}:return", name).into(),
+            match s.funcs.get(name) {
+                Some(func) if !func.is_native => {
+                    *s.callsites += 1;
+                    before.push(Stmt::FuncCall {
+                        name: name.clone(),
                         span: span.clone(),
-                    })),
-                    type_: Type::Value,
-                    is_local: false,
-                    is_cloud: false,
-                });
-                Some(Expr::Name(callsite))
-            } else {
-                None
+                        args: args.clone(),
+                        kwargs: kwargs.clone(),
+                    });
+                    let callsite = Name::Name {
+                        name: format!("@{}", *s.callsites).into(),
+                        span: span.clone(),
+                    };
+                    s.vars.insert(
+                        callsite.basename().clone(),
+                        Var {
+                            name: callsite.basename().clone(),
+                            span: callsite.basespan().clone(),
+                            type_: func.type_.clone(),
+                            default: None,
+                            is_cloud: false,
+                            is_used: true,
+                        },
+                    );
+                    before.push(Stmt::SetVar {
+                        name: callsite.clone(),
+                        value: Box::new(Expr::Name(Name::Name {
+                            name: format!("{}:return", name).into(),
+                            span: span.clone(),
+                        })),
+                        type_: Type::Value,
+                        is_local: false,
+                        is_cloud: false,
+                    });
+                    Some(Expr::Name(callsite))
+                }
+                _ => {None}
             }
         }
         Expr::UnOp {

@@ -46,8 +46,14 @@ Declr: () = {
     <w:NOWARP?> PROC <l:@L> <n:NAME> <r:@R> <a:Comma<Arg>> <b:Stmts> => {
         sprite.add_proc(Proc::new(n.clone(), l..r, w.is_none()), a, b, diagnostics);
     },
+    PROC NATIVE <l:@L> <n:NAME> <r:@R> "(" <a:Comma<ExtMenuArg>> ")" ";" => {
+        sprite.add_proc(Proc::new_native(n.clone(), l..r, false), a, Vec::new(), diagnostics);
+    },
     FUNC <l:@L> <n:NAME> <r:@R> "(" <a:Comma<Arg>> ")" <t:Type> <b:Stmts> => {
         sprite.add_func(Func::new(n.clone(), l..r, t), a, b, diagnostics);
+    },
+    FUNC NATIVE <l:@L> <n:NAME> <r:@R> "(" <a:Comma<ExtMenuArg>> ")" ";" => {
+            sprite.add_func(Func::new_native(n.clone(), l..r, Type::Value), a, Vec::new(), diagnostics);
     },
     <l:@L> ON <r:@R> <event:STR> <b:Stmts> => sprite.events.push(EventKind::On { event }.to_event(l..r, b)),
     <l:@L> ONFLAG <r:@R> <b:Stmts> => sprite.events.push(EventKind::OnFlag.to_event(l..r, b)),
@@ -563,6 +569,18 @@ Arg: Arg = {
 }
 
 #[inline]
+ExtMenuType: ExtMenuType = {
+    MENU => ExtMenuType::Menu,
+    MENUINPUT "<" <menu_name:NAME> ">" => ExtMenuType::new_menu_input(menu_name),
+    => ExtMenuType::NONE,
+}
+
+#[inline]
+ExtMenuArg: Arg = {
+    <menu_type:ExtMenuType> <l:@L> <name:NAME> <r:@R> <default:("=" <ConstExpr>)?> => Arg::new_with_menu(name, l..r, Type::Value, default, menu_type),
+}
+
+#[inline]
 StructField: (SmolStr, Span, Option<ConstExpr>) = {
     <l:@L> <name:NAME> <r:@R> <default:("=" <ConstExpr>)?> => (name, l..r, default),
 }
@@ -696,5 +714,8 @@ extern {
         SET_ROTATION_STYLE_DO_NOT_ROTATE => Token::SetRotationStyleDoNotRotate,
         SET_LAYER_ORDER => Token::SetLayerOrder,
         VAR => Token::Var,
+        NATIVE => Token::Native,
+        MENU => Token::Menu,
+        MENUINPUT => Token::MenuInput,
     }
 }

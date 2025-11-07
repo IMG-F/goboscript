@@ -25,6 +25,9 @@ pub enum Command {
         #[arg(short, long)]
         /// Output file, if not given, it will be the project directory's name + `.sb3`
         output: Option<PathBuf>,
+        #[arg(short, long)]
+        /// Specify the environment to build for.
+        environment: Option<String>,
     },
 
     /// Create a new goboscript project with a blank backdrop, a main sprite with a
@@ -84,6 +87,10 @@ pub enum Command {
         /// Generate a Makefile for building the project.
         #[arg(short = 'm', long)]
         makefile: bool,
+
+        /// Generate a task runner configuration file for the project.
+        #[arg(short = 't', long)]
+        task: bool
     },
 
     /// Format a goboscript project.

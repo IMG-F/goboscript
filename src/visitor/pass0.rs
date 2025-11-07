@@ -46,7 +46,7 @@ fn visit_sprite(input: &Path, sprite: &mut Sprite, mut stage: Option<&mut Sprite
             .func_locals
             .insert(func.name.clone(), Default::default());
         let name: SmolStr = format!("{}:return", func.name).into();
-        if !sprite.vars.contains_key(&name) {
+        if !sprite.vars.contains_key(&name) && !func.is_native {
             sprite.vars.insert(
                 name.clone(),
                 Var {

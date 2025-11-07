@@ -299,7 +299,18 @@ impl Stmt {
             Stmt::InsertAtList { .. } => "data_insertatlist",
             Stmt::SetListIndex { .. } => "data_replaceitemoflist",
             Stmt::Block { block, .. } => block.opcode(),
-            Stmt::ProcCall { .. } => "procedures_call",
+            Stmt::ProcCall { name: proc_name, .. } => {
+                s.sprite.procs.get(proc_name).and_then(|proc| {
+                    if proc.is_native {
+                        let static_name: &'static str = Box::leak(proc.name.to_string().into_boxed_str());
+                        Some(static_name)
+                    } else {
+                        Some("procedures_call")
+                    }
+                }).unwrap_or_else(|| {
+                    "procedures_call"
+                })
+            },
             Stmt::FuncCall { .. } => "procedures_call",
             Stmt::Return { .. } => "data_setvariableto",
         }
@@ -397,6 +408,20 @@ where T: Write + Seek
         )
     }
 
+    pub fn begin_fields(&mut self) -> io::Result<()> {
+        self.inputs_comma = false;
+        self.write_all(br#","fields":{"#)
+    }
+
+    pub fn field(
+        &mut self,
+        field_name: &str,
+        value: &str,
+    ) -> io::Result<()> {
+        write_comma_io(&mut self.zip, &mut self.inputs_comma)?;
+        write!(self, r#""{}":["{}",null]"#, field_name, value)
+    }
+
     pub fn substack(&mut self, name: &str, this_id: Option<NodeID>) -> io::Result<()> {
         let Some(this_id) = this_id else {
             return Ok(());
@@ -461,7 +486,32 @@ where T: Write + Seek
         }
         write!(self, "]")?; // targets
         write!(self, r#","monitors":[]"#)?;
-        write!(self, r#","extensions":[]"#)?;
+
+        // extensions
+        write!(self, r#","extensions": ["#)?;
+        self.inputs_comma = false;
+        if let Some(extensions) = config.extensions.as_ref() {
+            for extension in extensions {
+                write_comma_io(&mut self.zip, &mut self.inputs_comma)?;
+                write!(self, r#""{}""#, extension.0)?;
+            }
+        }
+        write!(self, r#"]"#)?;
+
+        // extensionURLs
+        if let Some(extensions) = config.extensions.as_ref() {
+            write!(self, r#","extensionURLs": {{"#)?;
+            self.inputs_comma = false;
+            for extension in extensions {
+                if !extension.1.is_empty() {
+                    write_comma_io(&mut self.zip, &mut self.inputs_comma)?;
+                    write!(self, r#""{}": "#, extension.0)?;
+                    write!(self, r#""{}""#, extension.1)?;
+                }
+            }
+            write!(self, r#"}}"#)?;
+        }
+
         write!(self, r#","meta":{{"#)?;
         write!(self, r#""semver":"3.0.0""#)?;
         write!(self, r#","vm":"0.2.0""#)?;
@@ -488,23 +538,29 @@ where T: Write + Seek
         broadcasts: &FxHashSet<SmolStr>,
     ) -> io::Result<()> {
         for proc in sprite.procs.values() {
-            if !sprite.used_procs.contains(&proc.name) {
-                d.report(DiagnosticKind::UnusedProc(proc.name.clone()), &proc.span);
-            } else {
-                for arg in &sprite.proc_args[&proc.name] {
-                    if !arg.is_used {
-                        d.report(DiagnosticKind::UnusedArg(arg.name.clone()), &arg.span);
+            if !proc.is_native {
+                // only report unused proc that are not native
+                if !sprite.used_procs.contains(&proc.name) {
+                    d.report(DiagnosticKind::UnusedProc(proc.name.clone()), &proc.span);
+                } else {
+                    for arg in &sprite.proc_args[&proc.name] {
+                        if !arg.is_used {
+                            d.report(DiagnosticKind::UnusedArg(arg.name.clone()), &arg.span);
+                        }
                     }
                 }
             }
         }
         for func in sprite.funcs.values() {
-            if !sprite.used_funcs.contains(&func.name) {
-                d.report(DiagnosticKind::UnusedFunc(func.name.clone()), &func.span);
-            } else {
-                for arg in &sprite.func_args[&func.name] {
-                    if !arg.is_used {
-                        d.report(DiagnosticKind::UnusedArg(arg.name.clone()), &arg.span);
+            if !func.is_native {
+                // only report unused func that are not native
+                if !sprite.used_funcs.contains(&func.name) {
+                    d.report(DiagnosticKind::UnusedFunc(func.name.clone()), &func.span);
+                } else {
+                    for arg in &sprite.func_args[&func.name] {
+                        if !arg.is_used {
+                            d.report(DiagnosticKind::UnusedArg(arg.name.clone()), &arg.span);
+                        }
                     }
                 }
             }
@@ -652,6 +708,8 @@ where T: Write + Seek
             .procs
             .values()
             .filter(|proc| sprite.used_procs.contains(&proc.name))
+            // do not generate native proc definitions
+            .filter(|proc| !proc.is_native)
         {
             let proc_definition = sprite.proc_definitions.get(&proc.name).unwrap();
             self.proc(
@@ -1310,9 +1368,28 @@ where T: Write + Seek
             Expr::Repr { repr, span, args } => {
                 self.repr(s, d, this_id, parent_id, repr, span, args)
             }
-            Expr::FuncCall { name, span, .. } => {
-                d.report(DiagnosticKind::UnrecognizedFunction(name.clone()), span);
-                Ok(())
+            Expr::FuncCall { name, span, args, .. } => {
+                s.sprite.funcs.get(name)
+                    .and_then(|func| func.is_native.then_some(()))
+                    .and_then(|_| {
+                        Option::from(self.ext_func_call(
+                            s,
+                            d,
+                            this_id,
+                            name,
+                            s.sprite
+                                .func_args
+                                .get(name)
+                                .map(|a| a.as_slice())
+                                .unwrap_or_default(),
+                            span,
+                            args
+                        ))
+                    })
+                    .unwrap_or_else(|| {
+                        d.report(DiagnosticKind::UnrecognizedFunction(name.clone()), span);
+                        Ok(())
+                    })
             }
             Expr::UnOp { op, opr, .. } => self.un_op(s, d, this_id, parent_id, op, opr),
             Expr::BinOp { op, lhs, rhs, .. } => self.bin_op(s, d, this_id, parent_id, op, lhs, rhs),
