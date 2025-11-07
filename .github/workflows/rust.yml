@@ -9,43 +9,64 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          # - os: windows-latest
-          #   target: x86_64-pc-windows-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-gnu
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install system deps (Linux only)
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install system dependencies (Linux)
         if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev
 
-      - name: Install system deps (macOS only)
-        if: startsWith(matrix.os, 'macos')
-        run: |
-          brew install openssl@3
-          echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> $GITHUB_ENV
-
-      - name: Install system deps (Windows only)
+      - name: Install system dependencies (Windows)
         if: startsWith(matrix.os, 'windows')
         run: |
           choco install openssl.light -y
           echo "OPENSSL_DIR=C:/Program Files/OpenSSL-Win64" >> $env:GITHUB_ENV
           echo "PKG_CONFIG_PATH=C:/Program Files/OpenSSL-Win64/lib/pkgconfig" >> $env:GITHUB_ENV
 
-      - name: Build
+      - name: Build release
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Upload release asset
-        uses: actions/upload-artifact@v4
+      - name: Rename binary
+        shell: bash
+        run: |
+          BIN_NAME=$(basename $(pwd))
+          OUT_NAME="${BIN_NAME}-${{ matrix.target }}"
+          mkdir dist
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            mv "target/${{ matrix.target }}/release/${BIN_NAME}.exe" "dist/${OUT_NAME}.exe"
+          else
+            mv "target/${{ matrix.target }}/release/${BIN_NAME}" "dist/${OUT_NAME}"
+          fi
+          echo "OUT_NAME=$OUT_NAME" >> $GITHUB_ENV
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: compiler-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/*
+          files: dist/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
