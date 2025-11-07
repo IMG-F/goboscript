@@ -68,17 +68,34 @@ jobs:
           fi
           echo "OUT_NAME=$OUT_NAME" >> $GITHUB_ENV
 
-      - name: Create timestamp
-        id: create_timestamp
-        run: echo "timestamp=$(date '+%Y-%m-%d-%H-%M-%S')" >> $GITHUB_OUTPUT
-        shell: bash
-
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: dist/*
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && format('snapshot-{0}', steps.create_timestamp.outputs.timestamp) || github.event.release.tag_name }}
-          body: ${{ github.event_name == 'workflow_dispatch' && github.event.head_commit.message || github.event.release.body }}
-          prerelease: ${{ github.event_name == 'workflow_dispatch' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: ${{ matrix.target }}
+          path: dist/*
+
+  release:
+      needs: build
+      runs-on: ubuntu-latest
+      permissions:
+        contents: write
+      steps:
+        - name: Download all artifacts
+          uses: actions/download-artifact@v4
+          with:
+            path: dist
+
+        - name: Create timestamp
+          id: create_timestamp
+          run: echo "timestamp=$(date '+%Y-%m-%d-%H-%M-%S')" >> $GITHUB_OUTPUT
+          shell: bash
+  
+        - name: Upload to GitHub Release
+          uses: softprops/action-gh-release@v2
+          with:
+            files: dist/**
+            tag_name: ${{ github.event_name == 'workflow_dispatch' && format('snapshot-{0}', steps.create_timestamp.outputs.timestamp) || github.event.release.tag_name }}
+            body: ${{ github.event_name == 'workflow_dispatch' && github.event.head_commit.message || github.event.release.body }}
+            prerelease: ${{ github.event_name == 'workflow_dispatch' }}
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
